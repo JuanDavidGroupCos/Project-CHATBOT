@@ -1,0 +1,6 @@
+mysql-connector-python
+SQLAlchemy
+python-dotenv
+requests
+bcrypt
+PyJWT
