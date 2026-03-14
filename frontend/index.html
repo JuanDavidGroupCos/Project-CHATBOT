@@ -1,20 +1,30 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SWAN</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./css/app.css">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&display=swap"
+    rel="stylesheet"
+  />
+
+  <link rel="stylesheet" href="./css/app.css" />
 </head>
 <body>
   <div class="shell">
     <aside class="sidebar">
       <div class="brand-card">
         <div class="brand-head">
-          <img src="./assets/logo.png" alt="Logo SWAN" class="brand-image">
+          <img
+            id="brandLogo"
+            src="./assets/logo.png"
+            alt="Logo SWAN"
+            class="brand-image"
+          />
           <div class="brand-text">
             <div class="brand-logo">SWAN</div>
             <p class="brand-subtitle">Quality Analytics AI</p>
@@ -27,7 +37,10 @@
         <p><strong>Nombre:</strong> <span id="userName">-</span></p>
         <p><strong>Correo:</strong> <span id="userEmail">-</span></p>
         <p><strong>Rol:</strong> <span id="userRole">-</span></p>
-        <button id="logoutBtn" class="btn btn-secondary">Cerrar sesión</button>
+
+        <button id="logoutBtn" class="btn btn-secondary" type="button">
+          Cerrar sesión
+        </button>
       </div>
 
       <div class="docs-card">
@@ -40,6 +53,9 @@
       <section class="viewer-panel">
         <div class="viewer-header">
           <h2 id="documentTitle">Selecciona un documento</h2>
+          <button id="refreshBtn" class="btn btn-secondary" type="button">
+            Recargar
+          </button>
         </div>
 
         <div id="documentViewer" class="document-viewer">
@@ -51,25 +67,51 @@
     </main>
   </div>
 
-  <button id="chatToggleBtn" class="chat-fab" type="button" aria-label="Abrir chat">
+  <button
+    id="chatToggleBtn"
+    class="chat-fab"
+    type="button"
+    aria-label="Abrir chat"
+    aria-controls="chatDrawer"
+    aria-expanded="false"
+  >
     <span class="chat-fab-icon">💬</span>
     <span class="chat-fab-text">Chatbot</span>
   </button>
 
-  <section id="chatDrawer" class="chat-drawer" aria-hidden="true">
+  <section
+    id="chatDrawer"
+    class="chat-drawer"
+    aria-hidden="true"
+  >
     <div class="chat-drawer-header">
       <div class="chat-title-wrap">
         <h2>SWAN Chat</h2>
         <p>Asistente documental</p>
       </div>
-      <button id="chatCloseBtn" class="chat-close-btn" type="button" aria-label="Cerrar chat">✕</button>
+
+      <button
+        id="chatCloseBtn"
+        class="chat-close-btn"
+        type="button"
+        aria-label="Cerrar chat"
+      >
+        ✕
+      </button>
     </div>
 
     <div id="chatBox" class="chat-box"></div>
 
     <div class="chat-input-wrap">
-      <textarea id="questionInput" placeholder="Pregúntale a SWAN sobre el documento actual..."></textarea>
-      <button id="sendBtn" class="btn btn-primary" type="button">Enviar</button>
+      <textarea
+        id="questionInput"
+        placeholder="Pregúntale a SWAN sobre el documento actual..."
+        rows="1"
+      ></textarea>
+
+      <button id="sendBtn" class="btn btn-primary" type="button">
+        Enviar
+      </button>
     </div>
   </section>
 

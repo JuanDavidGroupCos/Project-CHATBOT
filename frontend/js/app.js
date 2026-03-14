@@ -4,63 +4,134 @@ document.addEventListener("DOMContentLoaded", () => {
   const userName = document.getElementById("userName");
   const userEmail = document.getElementById("userEmail");
   const userRole = document.getElementById("userRole");
+
   const logoutBtn = document.getElementById("logoutBtn");
+  const refreshBtn = document.getElementById("refreshBtn");
+
   const documentList = document.getElementById("documentList");
   const documentTitle = document.getElementById("documentTitle");
   const documentViewer = document.getElementById("documentViewer");
+
   const chatBox = document.getElementById("chatBox");
   const questionInput = document.getElementById("questionInput");
   const sendBtn = document.getElementById("sendBtn");
+
   const chatDrawer = document.getElementById("chatDrawer");
   const chatToggleBtn = document.getElementById("chatToggleBtn");
   const chatCloseBtn = document.getElementById("chatCloseBtn");
 
+  const brandLogo = document.getElementById("brandLogo");
+
+  const BACKEND_BASE = API_BASE.replace(/\/api\/?$/, "");
+
+  const logoCandidates = [
+    "./assets/logo.png",
+    `${BACKEND_BASE}/assets/logo.png`,
+    "http://127.0.0.1:8000/assets/logo.png"
+  ];
+
+  let logoIndex = 0;
   let currentUser = null;
   let currentDocument = "";
   let chatHistory = [];
+  let currentFiles = [];
+  let isSending = false;
+  let isLoadingDocument = false;
 
-  async function apiFetch(path, options = {}) {
-    const response = await fetch(`${API_BASE}${path}`, {
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        ...(options.headers || {})
-      },
-      ...options
+  function resolveLogo() {
+    if (!brandLogo) return;
+
+    brandLogo.addEventListener("error", () => {
+      logoIndex += 1;
+      if (logoIndex < logoCandidates.length) {
+        brandLogo.src = logoCandidates[logoIndex];
+      }
     });
 
-    const data = await response.json().catch(() => ({}));
-    return { response, data };
+    brandLogo.src = logoCandidates[logoIndex];
+  }
+
+  function escapeHtml(value = "") {
+    return String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  async function apiFetch(path, options = {}) {
+    try {
+      const response = await fetch(`${API_BASE}${path}`, {
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...(options.headers || {})
+        },
+        ...options
+      });
+
+      const text = await response.text();
+      let data = {};
+
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch (_) {
+        data = {};
+      }
+
+      return { response, data };
+    } catch (error) {
+      return {
+        response: { ok: false, status: 500 },
+        data: {
+          success: false,
+          message: "No fue posible conectar con el servidor."
+        }
+      };
+    }
   }
 
   function openChat() {
     chatDrawer.classList.add("open");
     chatDrawer.setAttribute("aria-hidden", "false");
+    chatToggleBtn.setAttribute("aria-expanded", "true");
   }
 
   function closeChat() {
     chatDrawer.classList.remove("open");
     chatDrawer.setAttribute("aria-hidden", "true");
+    chatToggleBtn.setAttribute("aria-expanded", "false");
   }
 
-  function addMessage(content, role = "bot", sources = []) {
-    const wrapper = document.createElement("div");
-    wrapper.className = `bubble ${role}`;
-    wrapper.textContent = content;
-
-    if (sources.length && role === "bot") {
-      const sourcesBox = document.createElement("div");
-      sourcesBox.className = "sources";
-      sourcesBox.innerHTML =
-        "<strong>Fuentes:</strong><br>" +
-        sources
-          .map(item => `• ${item.file} | fragmento ${item.chunk_id} | score ${Number(item.score).toFixed(4)}`)
-          .join("<br>");
-      wrapper.appendChild(sourcesBox);
+  function toggleChat() {
+    if (chatDrawer.classList.contains("open")) {
+      closeChat();
+    } else {
+      openChat();
+      questionInput.focus();
     }
+  }
 
-    chatBox.appendChild(wrapper);
-    chatBox.scrollTop = chatBox.scrollHeight;
+  function autosizeTextarea() {
+    if (!questionInput) return;
+    questionInput.style.height = "auto";
+    questionInput.style.height = `${Math.min(questionInput.scrollHeight, 180)}px`;
+  }
+
+  function setSendState(loading) {
+    isSending = loading;
+    sendBtn.disabled = loading;
+    questionInput.disabled = loading;
+    sendBtn.textContent = loading ? "Enviando..." : "Enviar";
+  }
+
+  function setViewerLoading(message = "Cargando documento...") {
+    documentViewer.innerHTML = `
+      <div class="document-placeholder">
+        ${escapeHtml(message)}
+      </div>
+    `;
   }
 
   function renderDocument(htmlContent) {
@@ -71,29 +142,89 @@ document.addEventListener("DOMContentLoaded", () => {
     `;
   }
 
+  function renderViewerMessage(message) {
+    documentViewer.innerHTML = `
+      <div class="document-placeholder">
+        ${escapeHtml(message)}
+      </div>
+    `;
+  }
+
+  function syncActiveDocumentButton() {
+    const allButtons = document.querySelectorAll(".doc-list button");
+
+    allButtons.forEach((btn) => {
+      const btnFile = btn.getAttribute("data-file");
+      btn.classList.toggle("active", btnFile === currentDocument);
+    });
+  }
+
+  function addMessage(content, role = "bot", sources = []) {
+    const wrapper = document.createElement("div");
+    wrapper.className = `bubble ${role}`;
+    wrapper.textContent = content;
+
+    if (sources.length && role === "bot") {
+      const sourcesBox = document.createElement("div");
+      sourcesBox.className = "sources";
+
+      const sourceLines = sources.map((item) => {
+        const file = item.file || "Documento";
+        const chunkId = item.chunk_id ?? "-";
+        const score =
+          item.score !== undefined && item.score !== null
+            ? Number(item.score).toFixed(4)
+            : "-";
+
+        return `• ${file} | fragmento ${chunkId} | score ${score}`;
+      });
+
+      sourcesBox.innerHTML = `<strong>Fuentes:</strong><br>${sourceLines.join("<br>")}`;
+      wrapper.appendChild(sourcesBox);
+    }
+
+    chatBox.appendChild(wrapper);
+    chatBox.scrollTop = chatBox.scrollHeight;
+  }
+
+  function clearChat() {
+    chatBox.innerHTML = "";
+    chatHistory = [];
+  }
+
   function renderFiles(files) {
+    currentFiles = Array.isArray(files) ? files : [];
     documentList.innerHTML = "";
 
-    if (!files.length) {
+    if (!currentFiles.length) {
       const li = document.createElement("li");
-      li.textContent = "No hay documentos disponibles.";
+      li.innerHTML = `
+        <div class="document-placeholder" style="padding: 16px;">
+          No hay documentos disponibles.
+        </div>
+      `;
       documentList.appendChild(li);
       return;
     }
 
-    files.forEach(file => {
+    currentFiles.forEach((file) => {
       const li = document.createElement("li");
       const btn = document.createElement("button");
-      btn.type = "button";
-      btn.textContent = file.title || file.file;
 
-      btn.addEventListener("click", () => {
-        openDocument(file.file, btn);
+      btn.type = "button";
+      btn.textContent = file.title || file.file || "Documento";
+      btn.setAttribute("data-file", file.file || "");
+
+      btn.addEventListener("click", async () => {
+        if (!file.file || file.file === currentDocument || isLoadingDocument) return;
+        await openDocument(file.file);
       });
 
       li.appendChild(btn);
       documentList.appendChild(li);
     });
+
+    syncActiveDocumentButton();
   }
 
   async function loadProfile() {
@@ -104,10 +235,11 @@ document.addEventListener("DOMContentLoaded", () => {
       return false;
     }
 
-    currentUser = data.user;
+    currentUser = data.user || {};
     userName.textContent = currentUser.nombre || "-";
     userEmail.textContent = currentUser.email || "-";
     userRole.textContent = currentUser.rol || "-";
+
     return true;
   }
 
@@ -116,58 +248,70 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!data.success) {
       renderFiles([]);
+      renderViewerMessage(data.message || "No fue posible consultar los documentos.");
       return;
     }
 
-    renderFiles(data.files || []);
+    const files = Array.isArray(data.files) ? data.files : [];
+    renderFiles(files);
 
-    if (data.files && data.files.length) {
-      const first = data.files[0];
-      await openDocument(first.file);
+    if (files.length > 0) {
+      await openDocument(files[0].file);
+    } else {
+      documentTitle.textContent = "Sin documentos";
+      renderViewerMessage("No hay documentos cargados actualmente.");
     }
   }
 
-  async function openDocument(fileName, clickedBtn = null) {
+  async function openDocument(fileName) {
+    if (!fileName) return;
+
+    isLoadingDocument = true;
+    documentTitle.textContent = "Cargando...";
+    setViewerLoading("Abriendo documento...");
+
     const { data } = await apiFetch(`/document?file=${encodeURIComponent(fileName)}`, {
       method: "GET"
     });
 
+    isLoadingDocument = false;
+
     if (!data.success) {
       documentTitle.textContent = "Error";
-      documentViewer.innerHTML = `
-        <div class="document-placeholder">
-          ${data.message || "No se pudo abrir el documento."}
-        </div>
-      `;
+      renderViewerMessage(data.message || "No se pudo abrir el documento.");
       return;
     }
 
-    currentDocument = data.document.file;
-    documentTitle.textContent = data.document.title || data.document.file;
-    renderDocument(data.document.html_content || "<p>Documento vacío.</p>");
+    currentDocument = data.document?.file || fileName;
+    documentTitle.textContent = data.document?.title || data.document?.file || "Documento";
+    renderDocument(data.document?.html_content || "<p>Documento vacío.</p>");
+    syncActiveDocumentButton();
 
-    document.querySelectorAll(".doc-list button").forEach(btn => btn.classList.remove("active"));
-
-    if (clickedBtn) {
-      clickedBtn.classList.add("active");
-    } else {
-      document.querySelectorAll(".doc-list button").forEach(btn => {
-        if (btn.textContent === (data.document.title || data.document.file)) {
-          btn.classList.add("active");
-        }
-      });
-    }
+    clearChat();
+    addMessage(
+      `Hola ${currentUser?.nombre || ""}, ya tengo cargado el documento "${data.document?.title || data.document?.file || "actual"}". Puedes preguntarme sobre su contenido.`,
+      "bot"
+    );
   }
 
   async function sendQuestion() {
     const question = questionInput.value.trim();
-    if (!question) return;
+
+    if (!question || isSending) return;
+
+    if (!currentDocument) {
+      openChat();
+      addMessage("Primero selecciona un documento para poder ayudarte.", "bot");
+      return;
+    }
 
     openChat();
-
     addMessage(question, "user");
     chatHistory.push({ role: "user", content: question });
+
     questionInput.value = "";
+    autosizeTextarea();
+    setSendState(true);
 
     const { data } = await apiFetch("/chat", {
       method: "POST",
@@ -178,60 +322,67 @@ document.addEventListener("DOMContentLoaded", () => {
       })
     });
 
+    setSendState(false);
+
     if (!data.success) {
       addMessage(data.message || "No fue posible procesar la pregunta.", "bot");
       return;
     }
 
-    addMessage(data.answer || "Sin respuesta.", "bot", data.sources || []);
-    chatHistory.push({ role: "assistant", content: data.answer || "" });
+    const answer = data.answer || "Sin respuesta.";
+    addMessage(answer, "bot", data.sources || []);
+    chatHistory.push({ role: "assistant", content: answer });
   }
 
-  if (chatToggleBtn) {
-    chatToggleBtn.addEventListener("click", () => {
-      if (chatDrawer.classList.contains("open")) {
-        closeChat();
-      } else {
-        openChat();
-      }
+  async function logout() {
+    await apiFetch("/auth/logout", {
+      method: "POST",
+      body: JSON.stringify({})
     });
+
+    window.location.href = "./login.html";
   }
 
-  if (chatCloseBtn) {
-    chatCloseBtn.addEventListener("click", closeChat);
+  async function refreshCurrentView() {
+    if (!currentFiles.length) {
+      await loadFiles();
+      return;
+    }
+
+    if (currentDocument) {
+      await openDocument(currentDocument);
+    } else {
+      await loadFiles();
+    }
   }
 
-  if (logoutBtn) {
-    logoutBtn.addEventListener("click", async () => {
-      await apiFetch("/auth/logout", {
-        method: "POST",
-        body: JSON.stringify({})
-      });
-      window.location.href = "./login.html";
-    });
-  }
+  chatToggleBtn?.addEventListener("click", toggleChat);
+  chatCloseBtn?.addEventListener("click", closeChat);
+  logoutBtn?.addEventListener("click", logout);
+  refreshBtn?.addEventListener("click", refreshCurrentView);
+  sendBtn?.addEventListener("click", sendQuestion);
 
-  if (sendBtn) {
-    sendBtn.addEventListener("click", sendQuestion);
-  }
+  questionInput?.addEventListener("input", autosizeTextarea);
 
-  if (questionInput) {
-    questionInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        sendQuestion();
-      }
-    });
-  }
+  questionInput?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      sendQuestion();
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && chatDrawer.classList.contains("open")) {
+      closeChat();
+    }
+  });
 
   (async function init() {
+    resolveLogo();
+    autosizeTextarea();
+
     const ok = await loadProfile();
     if (!ok) return;
-
-    addMessage(
-      "Hola, soy SWAN. Ya cargué tu perfil y el documento disponible. Puedes preguntarme sobre su contenido.",
-      "bot"
-    );
 
     await loadFiles();
   })();
