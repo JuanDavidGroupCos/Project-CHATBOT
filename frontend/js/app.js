@@ -21,6 +21,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const chatCloseBtn = document.getElementById("chatCloseBtn");
 
   const brandLogo = document.getElementById("brandLogo");
+  const chatFabAvatar = document.getElementById("chatFabAvatar");
 
   const BACKEND_BASE = API_BASE.replace(/\/api\/?$/, "");
 
@@ -30,7 +31,17 @@ document.addEventListener("DOMContentLoaded", () => {
     "http://127.0.0.1:8000/assets/logo.png"
   ];
 
+  const avatarCandidates = [
+    "./assets/chatbot-avatar.png",
+    `${BACKEND_BASE}/assets/chatbot-avatar.png`,
+    "http://127.0.0.1:8000/assets/chatbot-avatar.png",
+    "./assets/logo.png",
+    `${BACKEND_BASE}/assets/logo.png`,
+    "http://127.0.0.1:8000/assets/logo.png"
+  ];
+
   let logoIndex = 0;
+  let avatarIndex = 0;
   let currentUser = null;
   let currentDocument = "";
   let chatHistory = [];
@@ -49,6 +60,19 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     brandLogo.src = logoCandidates[logoIndex];
+  }
+
+  function resolveAvatarImage(imageElement) {
+    if (!imageElement) return;
+
+    imageElement.addEventListener("error", () => {
+      avatarIndex += 1;
+      if (avatarIndex < avatarCandidates.length) {
+        imageElement.src = avatarCandidates[avatarIndex];
+      }
+    });
+
+    imageElement.src = avatarCandidates[avatarIndex];
   }
 
   function escapeHtml(value = "") {
@@ -160,32 +184,48 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function addMessage(content, role = "bot", sources = []) {
-    const wrapper = document.createElement("div");
-    wrapper.className = `bubble ${role}`;
-    wrapper.textContent = content;
+  const row = document.createElement("div");
+  row.className = `message-row ${role}`;
 
-    if (sources.length && role === "bot") {
-      const sourcesBox = document.createElement("div");
-      sourcesBox.className = "sources";
+  if (role === "bot") {
+    const avatar = document.createElement("div");
+    avatar.className = "message-avatar";
 
-      const sourceLines = sources.map((item) => {
-        const file = item.file || "Documento";
-        const chunkId = item.chunk_id ?? "-";
-        const score =
-          item.score !== undefined && item.score !== null
-            ? Number(item.score).toFixed(4)
-            : "-";
+    const avatarImg = document.createElement("img");
+    avatarImg.alt = "Avatar SWAN";
+    resolveAvatarImage(avatarImg);
 
-        return `• ${file} | fragmento ${chunkId} | score ${score}`;
-      });
-
-      sourcesBox.innerHTML = `<strong>Fuentes:</strong><br>${sourceLines.join("<br>")}`;
-      wrapper.appendChild(sourcesBox);
-    }
-
-    chatBox.appendChild(wrapper);
-    chatBox.scrollTop = chatBox.scrollHeight;
+    avatar.appendChild(avatarImg);
+    row.appendChild(avatar);
   }
+
+  const wrapper = document.createElement("div");
+  wrapper.className = `bubble ${role}`;
+  wrapper.textContent = content;
+
+  if (sources.length && role === "bot") {
+    const sourcesBox = document.createElement("div");
+    sourcesBox.className = "sources";
+
+    const sourceLines = sources.map((item) => {
+      const file = item.file || "Documento";
+      const chunkId = item.chunk_id ?? "-";
+      const score =
+        item.score !== undefined && item.score !== null
+          ? Number(item.score).toFixed(4)
+          : "-";
+
+      return `• ${file} | fragmento ${chunkId} | score ${score}`;
+    });
+
+    sourcesBox.innerHTML = `<strong>Fuentes:</strong><br>${sourceLines.join("<br>")}`;
+    wrapper.appendChild(sourcesBox);
+  }
+
+  row.appendChild(wrapper);
+  chatBox.appendChild(row);
+  chatBox.scrollTop = chatBox.scrollHeight;
+}
 
   function clearChat() {
     chatBox.innerHTML = "";
@@ -378,8 +418,9 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   (async function init() {
-    resolveLogo();
-    autosizeTextarea();
+  resolveLogo();
+  resolveAvatarImage(chatFabAvatar);
+  autosizeTextarea();
 
     const ok = await loadProfile();
     if (!ok) return;
