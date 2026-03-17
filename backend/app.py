@@ -119,7 +119,9 @@ class SwanHandler(BaseHTTPRequestHandler):
                 if not user:
                     return
 
+                build_index()
                 files = list_documents()
+
                 return self.send_json(
                     {
                         "success": True,
@@ -141,6 +143,7 @@ class SwanHandler(BaseHTTPRequestHandler):
                         status=400,
                     )
 
+                build_index()
                 doc = get_document_by_name(filename)
                 if not doc:
                     return self.send_json(

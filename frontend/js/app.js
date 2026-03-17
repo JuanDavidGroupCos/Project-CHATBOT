@@ -384,15 +384,32 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function refreshCurrentView() {
-    if (!currentFiles.length) {
-      await loadFiles();
+    const previousDocument = currentDocument;
+
+    const { data } = await apiFetch("/files", { method: "GET" });
+
+    if (!data.success) {
+      renderFiles([]);
+      renderViewerMessage(data.message || "No fue posible consultar los documentos.");
       return;
     }
 
-    if (currentDocument) {
-      await openDocument(currentDocument);
+    const files = Array.isArray(data.files) ? data.files : [];
+    renderFiles(files);
+
+    if (!files.length) {
+      currentDocument = "";
+      documentTitle.textContent = "Sin documentos";
+      renderViewerMessage("No hay documentos cargados actualmente.");
+      return;
+    }
+
+    const stillExists = files.some((file) => file.file === previousDocument);
+
+    if (stillExists) {
+      await openDocument(previousDocument);
     } else {
-      await loadFiles();
+      await openDocument(files[0].file);
     }
   }
 
